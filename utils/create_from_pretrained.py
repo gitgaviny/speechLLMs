@@ -160,7 +160,7 @@ def add_special_tokens(tokenizer: AutoTokenizer, instruct: bool) -> List[int]:  
             "<eos_response>",
         ]
     else:
-        extra_tokens = ["<sc>"]
+        extra_tokens = ["<sc>", "<pad>"]
 
     # Split pad vs additional_special_tokens
     additional = [tok for tok in extra_tokens if tok != "<pad>"]
@@ -278,10 +278,22 @@ def main() -> None:  # noqa: D401
 
     tokenizer.save_pretrained(save_path)
 
+    if args.instruct:
+        prompts_idx = torch.ones((1, 10)).long()
+    else:
+        prompts_idx = None
+
     # Optional quick generate test (dummy input)
     if args.check_generate:
         logging.info("Running dummy generate() to verify model works …")
-        out = model.generate(torch.ones((1, 2000)))
+        out = model.generate(
+                inputs=torch.ones((1, 2000)), 
+                prompt_ids=prompts_idx,
+                max_length=150,
+                num_beams=1,
+                synced_gpus=False,
+                use_cache=True,
+        )
         logging.info("Generate output shape: %s", out.shape)
 
     # Save final model

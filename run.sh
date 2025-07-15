@@ -83,12 +83,13 @@ if [ ${stage} -le 1 ] && [ ${stop_stage} -ge 1 ]; then
 fi
 
 # 2. Create the pre-trained AED from pre-trained speech encoder and LLMs
+model_ids=${encoder}-${decoder}
 if [ ${stage} -le 2 ] && [ ${stop_stage} -ge 2 ]; then
     python utils/create_from_pretrained.py \
         --encoder_id microsoft/wavlm-large \
 	--decoder_base /lustre/share/downloaded/models/meta-llama \
 	--llm_id ${decoder} \
-	--save_dir dump/wavlm-llama-1B \
+	--save_dir dump/${model_ids} \
 	--talker_ctc \
 	--talker_numbers ${talker_numbers} \
 	--check_generate \
@@ -96,11 +97,13 @@ if [ ${stage} -le 2 ] && [ ${stop_stage} -ge 2 ]; then
 fi
 
 # 3. Training
+NUM_GPUS=$(python -c "import torch; print(torch.cuda.device_count())")
+echo "Detected $NUM_GPUS GPUs"
 if [ ${stage} -le 3 ] && [ ${stop_stage} -ge 3 ]; then
     python -m torch.distributed.launch \
-  	--nproc_per_node 2 finetune_asr.py \
+  	--nproc_per_node=$NUM_GPUS finetune_asr.py \
 	--dataset_name="datasets/${corpus}" \
-	--model_name_or_path="dump/wavlm-llama-1B-Instruct" \
+	--model_name_or_path="dump/${model_ids}" \
 	--train_split_name="train" \
 	--eval_split_name="validation" \
 	--adapter_only_decoder=${adapter_only_decoder} \
@@ -136,31 +139,53 @@ if [ ${stage} -le 3 ] && [ ${stop_stage} -ge 3 ]; then
 	--do_eval true \
 	--do_lower_case
 
-    #python merge_adapter.py ${output_dir}
+    python utils/merge_adapter.py ${output_dir}
 fi
 
 if [ ${stage} -le 4 ] && [ ${stop_stage} -ge 4 ]; then
-    safetensor_merged=True
-    adapter_only_decoder=True
     _set="validation test"
     for subset in $_set; do
         dataset_name=data/${corpus}/${subset}
-        python speech_recognition_seq2seq_decoding.py \
-            --dataset_name=${dataset_name} \
-            --model_name_or_path=${output_dir} \
-            --adapter_model_name_or_path=${output_dir}/model.safetensors \
-            --adapter_only_decoder ${adapter_only_decoder} \
-            --safetensor_merged ${safetensor_merged} \
+	python -m torch.distributed.launch \
+	    --nproc_per_node 1 inference_asr.py \
+            --dataset_name="datasets/${corpus}/${subset}" \
+            --model_name_or_path="${output_dir}" \
+            --train_split_name="train" \
+            --eval_split_name="validation" \
+            --adapter_only_decoder=${adapter_only_decoder} \
             --output_dir=${output_dir} \
+            --metric_for_best_model="eval_loss" \
+            --greater_is_better=false \
             --preprocessing_num_workers="16" \
             --audio_column_name="audio" \
             --text_column_name="text" \
+            --overwrite_output_dir false\
+            --num_train_epochs=${epoch} \
+            --per_device_train_batch_size="16" \
+            --per_device_eval_batch_size="16" \
+            --gradient_accumulation_steps="1" \
+            --learning_rate="3e-5" \
+            --warmup_steps="400" \
+            --evaluation_strategy="steps" \
+            --save_steps="1600" \
+            --eval_steps=${eval_steps} \
+            --logging_steps="10" \
+            --save_total_limit="5" \
+            --freeze_feature_encoder true \
+            --freeze_encoder ${encoder_freeze} \
+            --freeze_decoder ${decoder_freeze} \
+            --partial_encoder_unfreeze="${partial_encoder_unfreeze}" \
+            --partial_decoder_unfreeze="${partial_decoder_unfreeze}" \
+            --partial_others_unfreeze="${partial_others_unfreeze}" \
+            --gradient_checkpointing \
             --fp16 \
             --group_by_length \
             --predict_with_generate \
+            --do_train false \
+            --do_eval true \
             --do_lower_case
 
-	python compute-wer.py \
+	python utils/compute-wer.py \
 	    --char=1 \
 	    --v=1 ${output_dir}/${subset}_label.text ${output_dir}/${subset}_decod.text \
 	    > ${output_dir}/${subset}_decod.wer

@@ -414,7 +414,9 @@ class SpeechEncoderDecoderModelLlama(PreTrainedModel, GenerationMixin_Instruct):
 
             mask = (labels == self.ignore_token_id) # self.ignore_token_id = -100
             first_pad_id = mask.float().argmax(dim=1)
-            labels[torch.arange(batch), first_pad_id] = self.config.eos_token_id[0] # Here we add the <eos> in labels
+            # Here we add the <eos> in labels
+            labels[torch.arange(batch), first_pad_id] = eos_token_id = self.config.eos_token_id[0] if isinstance(self.config.eos_token_id, (list, tuple)) else self.config.eos_token_id
+
 
             # Compute the length of prompt
             # !!!! Should be fixed a little bit later
@@ -435,6 +437,7 @@ class SpeechEncoderDecoderModelLlama(PreTrainedModel, GenerationMixin_Instruct):
             bos_response_idx = labels[0].eq(self.bosr_token_id).nonzero()[0]
             contents = labels[:, bos_response_idx+1:]
             labels = torch.cat((ignore_contents_mask, contents), dim=1)
+            print(labels[0])
 
         # Decode
         decoder_outputs = self.decoder(

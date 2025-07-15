@@ -11,7 +11,7 @@ cd /lustre/users/shi/toolkits/m_speaker_llm/Multi-talker-ASR-with-LLMs/slurm
 stage=3
 stop_stage=3
 epoch=40
-corpus=libri2mix_noisy
+corpus=libri2mix_mini
 encoder=wavlm
 decoder=Llama-3.2-1B
 encoder_freeze=false

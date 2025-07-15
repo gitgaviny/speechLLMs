@@ -18,6 +18,7 @@ from typing import Dict
 
 import datasets
 from utils.instruction_template_utils import build_prompt_and_input
+from datasets import DatasetDict, load_dataset, load_from_disk
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +30,7 @@ def preprocess_and_filter(
     tokenizer,
     config,
     training_args,
+    inference_mode=False,
 ) -> datasets.DatasetDict:
     """
     Map + filter the dataset dict according to step 7 of the training script.
@@ -56,15 +58,27 @@ def preprocess_and_filter(
     )
 
     # ------------ optional sample limiting --------------------------
-    if data_args.max_train_samples is not None and "train" in raw_datasets:
-        raw_datasets["train"] = raw_datasets["train"].select(range(data_args.max_train_samples))
-    if data_args.max_eval_samples is not None and "eval" in raw_datasets:
-        raw_datasets["eval"] = raw_datasets["eval"].select(range(data_args.max_eval_samples))
+
+
+    if inference_mode == False:
+        if data_args.max_train_samples is not None and "train" in raw_datasets:
+            raw_datasets["train"] = raw_datasets["train"].select(range(data_args.max_train_samples))
+        if data_args.max_eval_samples is not None and "eval" in raw_datasets:
+            raw_datasets["eval"] = raw_datasets["eval"].select(range(data_args.max_eval_samples))
+    else:
+        raw_datasets = DatasetDict({
+            "eval": raw_datasets
+        })
 
     # ------------ mapping fn ----------------------------------------
     def prepare_example(batch: Dict):
         # 1) audio → features
         audio = batch[audio_col]
+
+        if inference_mode:
+            idx = batch['id']
+            batch["idx"] = idx
+
         feats = feature_extractor(
             audio["array"],
             sampling_rate=audio["sampling_rate"],
