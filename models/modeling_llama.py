@@ -141,6 +141,12 @@ class LlamaModel(LlamaPreTrainedModel):
                 # if the cache is used, from the 2-nd iteration, only one token is provided
                 # here we directly set the len_speech_special_tokens = -1
                 len_speech_special_tokens = -1
+        else:
+            if input_ids[0][0] == self.config.bos_token_id:
+                # len_speech_special_tokens = 0 means the speech embedding should be inserted
+                len_speech_special_tokens = 0 
+            else:
+                len_speech_special_tokens = -1
 
         if inputs_embeds is None:
             inputs_embeds = self.embed_tokens(input_ids)
@@ -170,7 +176,11 @@ class LlamaModel(LlamaPreTrainedModel):
         )
 
         if not len_speech_special_tokens:
-            hidden_states = torch.cat([inputs_embeds[:, :position_boss+1, :], encoder_hidden_states, inputs_embeds[:, position_eoss:, :]], dim=1)
+            if self.config.instruct:
+                hidden_states = torch.cat([inputs_embeds[:, :position_boss+1, :], encoder_hidden_states, inputs_embeds[:, position_eoss:, :]], dim=1)
+            else:
+                # Since there is no prompt, so we directly concatenate the speech embedding after the bos token
+                hidden_states = torch.cat([inputs_embeds[:, :1, :], encoder_hidden_states, inputs_embeds[:, 1:, :]], dim=1) 
         else:
             hidden_states = inputs_embeds
 

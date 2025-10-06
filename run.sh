@@ -1,11 +1,14 @@
 #!/bin/bash
 
-# !!!!!!!!!!!!!!!!!!! Should be care !!!!!!!!!!!!!!!!!!!!!
-# We need to enter the corresponding directory after slurm
-cd /lustre/users/shi/toolkits/m_speaker_llm/Multi-Speaker-ASR-with-LLM/
-source venv/bin/activate
-root_dir=/lustre/users/shi/toolkits/m_speaker_llm/Multi-talker-ASR-with-LLMs
-cd ${root_dir}
+# source /lustre/users/shi/toolkits/m_speaker_llm/Multi-Speaker-ASR-with-LLM/venv/bin/activate
+set -euo pipefail
+
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+root_dir="$SCRIPT_DIR"
+
+cd "$root_dir"
+echo "++++ Current path: ${root_dir}"
 # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 # General configuration
@@ -23,31 +26,33 @@ for arg in "$@"; do
     instruct=*)             instruct="${arg#*=}" ;;
     talker_ctc=*)           talker_ctc="${arg#*=}" ;;
     talker_numbers=*)       talker_numbers="${arg#*=}" ;;
-    output_dir=*)       output_dir="${arg#*=}" ;;
+    output_dir=*)           output_dir="${arg#*=}" ;;
     partial_encoder_unfreeze=*)      partial_encoder_unfreeze="${arg#*=}" ;;
     partial_decoder_unfreeze=*)       partial_decoder_unfreeze="${arg#*=}" ;;
     partial_others_unfreeze=*)       partial_others_unfreeze="${arg#*=}" ;;
-    eval_steps=*)       eval_steps="${arg#*=}" ;;
+    eval_steps=*)           eval_steps="${arg#*=}" ;;
+    virtual_env=*)          virtual_env="${arg#*=}" ;;
     *) echo "Unknown option: $arg" >&2; exit 1 ;;
   esac
 done
 
-echo "stage=$stage"
-echo "stop_stage=$stop_stage"
-echo "epoch=$epoch"
-echo "corpus=$corpus"
-echo "encoder=$encoder"
-echo "decoder=$decoder"
-echo "encoder_freeze=$encoder_freeze"
-echo "decoder_freeze=$decoder_freeze"
-echo "adapter_only_decoder=$adapter_only_decoder"
-echo "instruct=$instruct"
-echo "talker_ctc=$talker_ctc"
-echo "talker_numbers=$talker_numbers"
-echo "partial_encoder_unfreeze=$partial_encoder_unfreeze"
-echo "partial_decoder_unfreeze=$partial_decoder_unfreeze"
-echo "partial_others_unfreeze=$partial_others_unfreeze"
-echo "eval_steps=$eval_steps"
+echo "++++ stage=$stage"
+echo "++++ stop_stage=$stop_stage"
+echo "++++ epoch=$epoch"
+echo "++++ corpus=$corpus"
+echo "++++ encoder=$encoder"
+echo "++++ decoder=$decoder"
+echo "++++ encoder_freeze=$encoder_freeze"
+echo "++++ decoder_freeze=$decoder_freeze"
+echo "++++ adapter_only_decoder=$adapter_only_decoder"
+echo "++++ instruct=$instruct"
+echo "++++ talker_ctc=$talker_ctc"
+echo "++++ talker_numbers=$talker_numbers"
+echo "++++ partial_encoder_unfreeze=$partial_encoder_unfreeze"
+echo "++++ partial_decoder_unfreeze=$partial_decoder_unfreeze"
+echo "++++ partial_others_unfreeze=$partial_others_unfreeze"
+echo "++++ eval_steps=$eval_steps"
+echo "++++ virtual_env=$virtual_env"
 
 output_dir=${output_dir}/${encoder}-${decoder}
 if [ "${encoder_freeze}" = "true" ]; then
@@ -66,15 +71,75 @@ else
     output_dir="${output_dir}-adater_encoder_decoder"
 fi
 output_dir=${output_dir}-${corpus}
-echo "output_dir=$output_dir"
+echo "++++ output_dir=$output_dir"
 
 if [[ "$instruct" == "true" ]]; then
   extra_args+=" --instruct"
 fi
 
+
+PY_BIN="$virtual_env/bin/python"
+
+echo "== Node: $(hostname)"
+echo "== Before fix: show current venv python status"
+ls -l "$PY_BIN" || echo "ls failed (maybe broken symlink)"
+echo "Resolved -> $(readlink -f "$PY_BIN" || echo NA)"
+echo "System python on this node:"
+command -v python3 || true
+python3 -V || true
+echo "Available /usr/bin/python* on this node:"
+ls -l /usr/bin/python* 2>/dev/null || true
+
+# --- Choose a working system Python on this compute node ---
+# Prefer Python 3.10 to match your original venv; fallback to 3.11 or 3.8 if needed.
+TARGET_PY="$(command -v python3.10 || true)"
+if [[ -z "${TARGET_PY}" ]]; then
+  # If 'python3' is 3.10 on this node, use it
+  if python3 -V 2>/dev/null | grep -qE '^Python 3\.10\.'; then
+    TARGET_PY="$(command -v python3)"
+  fi
+fi
+# Last resort: allow 3.11 or 3.8 (may require reinstalling wheels later)
+if [[ -z "${TARGET_PY}" ]]; then
+  TARGET_PY="$(command -v python3.11 || true)"
+fi
+if [[ -z "${TARGET_PY}" ]]; then
+  TARGET_PY="$(command -v python3.8 || true)"
+fi
+
+if [[ -z "${TARGET_PY}" ]]; then
+  echo "ERROR: No suitable system python3 found on this node." >&2
+  exit 1
+fi
+echo "Using system Python: $TARGET_PY ($("$TARGET_PY" -V 2>&1))"
+
+# --- Repair venv python symlinks if broken and align with node's interpreter ---
+# Reason: your venv/bin/python pointed to /usr/bin/python3.10, which doesn’t exist on some nodes.
+if [[ ! -x "$PY_BIN" ]] || { [[ -L "$PY_BIN" ]] && [[ ! -e "$(readlink -f "$PY_BIN")" ]]; }; then
+  echo ">>> Fixing venv python links to: $TARGET_PY"
+  ln -sf "$TARGET_PY" "$virtual_env/bin/python"
+  ln -sf "$TARGET_PY" "$virtual_env/bin/python3"
+  # If the chosen interpreter is 3.10, also create python3.10 name for tools that expect it
+  if "$TARGET_PY" -V 2>&1 | grep -qE '^Python 3\.10\.'; then
+    ln -sf "$TARGET_PY" "$virtual_env/bin/python3.10"
+  fi
+
+  # Upgrade venv layout in-place so all scripts' shebangs point to the new interpreter
+  "$TARGET_PY" -m venv --upgrade "$virtual_env"
+fi
+
+
+export TORCH_DISTRIBUTED_DEBUG=DETAIL
+export NCCL_DEBUG=INFO
+export NCCL_ASYNC_ERROR_HANDLING=1
+export CUDA_LAUNCH_BLOCKING=1
+export TORCH_SHOW_CPP_STACKTRACES=1
+
+
+
 # 1. Data preparing
 if [ ${stage} -le 1 ] && [ ${stop_stage} -ge 1 ]; then
-    python utils/generate_dataset.py \
+    "$PY_BIN" utils/generate_dataset.py \
         --base_data_path /lustre/users/shi/toolkits/espnet/egs2/librimix/sot_asr1/data \
         --number ${talker_numbers} \
 	--suffix _clean \
@@ -85,7 +150,7 @@ fi
 # 2. Create the pre-trained AED from pre-trained speech encoder and LLMs
 model_ids=${encoder}-${decoder}
 if [ ${stage} -le 2 ] && [ ${stop_stage} -ge 2 ]; then
-    python utils/create_from_pretrained.py \
+   "$PY_BIN" utils/create_from_pretrained.py \
         --encoder_id microsoft/wavlm-large \
 	--decoder_base /lustre/share/downloaded/models/meta-llama \
 	--llm_id ${decoder} \
@@ -97,10 +162,10 @@ if [ ${stage} -le 2 ] && [ ${stop_stage} -ge 2 ]; then
 fi
 
 # 3. Training
-NUM_GPUS=$(python -c "import torch; print(torch.cuda.device_count())")
+NUM_GPUS=$("$PY_BIN" -c 'import torch; print(torch.cuda.device_count())')
 echo "Detected $NUM_GPUS GPUs"
 if [ ${stage} -le 3 ] && [ ${stop_stage} -ge 3 ]; then
-    python -m torch.distributed.launch \
+    "$PY_BIN" -m torch.distributed.launch \
   	--nproc_per_node=$NUM_GPUS finetune_asr.py \
 	--dataset_name="datasets/${corpus}" \
 	--model_name_or_path="dump/${model_ids}" \
@@ -139,14 +204,14 @@ if [ ${stage} -le 3 ] && [ ${stop_stage} -ge 3 ]; then
 	--do_eval true \
 	--do_lower_case
 
-    python utils/merge_adapter.py ${output_dir}
+    "$PY_BIN" utils/merge_adapter.py ${output_dir}
 fi
 
 if [ ${stage} -le 4 ] && [ ${stop_stage} -ge 4 ]; then
     _set="validation test"
     for subset in $_set; do
         dataset_name=data/${corpus}/${subset}
-	python -m torch.distributed.launch \
+	"$PY_BIN" -m torch.distributed.launch \
 	    --nproc_per_node 1 inference_asr.py \
             --dataset_name="datasets/${corpus}/${subset}" \
             --model_name_or_path="${output_dir}" \
@@ -185,7 +250,7 @@ if [ ${stage} -le 4 ] && [ ${stop_stage} -ge 4 ]; then
             --do_eval true \
             --do_lower_case
 
-	python utils/compute-wer.py \
+	"$PY_BIN" utils/compute-wer.py \
 	    --char=1 \
 	    --v=1 ${output_dir}/${subset}_label.text ${output_dir}/${subset}_decod.text \
 	    > ${output_dir}/${subset}_decod.wer

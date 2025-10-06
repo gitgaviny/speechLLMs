@@ -118,6 +118,7 @@ class SpeechEncoderDecoderModelLlama(PreTrainedModel, GenerationMixin_Instruct):
         self.talker_ctc      = getattr(self.config, "talker_ctc",     False)
         self.talker_numbers  = getattr(self.config, "talker_numbers", 2)
         self.instruct        = getattr(self.config, "instruct",       False)
+        self.eos_token_id    = getattr(self.config, "eos_token_id", None)
 
         if self.instruct:
             self.bosp_token_id = self.config.bosp_token_id
@@ -417,27 +418,37 @@ class SpeechEncoderDecoderModelLlama(PreTrainedModel, GenerationMixin_Instruct):
             # Here we add the <eos> in labels
             labels[torch.arange(batch), first_pad_id] = eos_token_id = self.config.eos_token_id[0] if isinstance(self.config.eos_token_id, (list, tuple)) else self.config.eos_token_id
 
-
             # Compute the length of prompt
             # !!!! Should be fixed a little bit later
             # Currently, since all the prompts are same, we directly use one sample to compute the length
-            # But should be modifed for variable-prompt condition
-            seq = labels[0]
-            len_prompt = (seq.eq(self.eosp_token_id).nonzero()[0] - seq.eq(self.bosp_token_id).nonzero()[0] - 1).item()
+            # TODO: But should be modifed for variable-prompt condition
+            if self.instruct:
+                seq = labels[0]
+                len_prompt = (seq.eq(self.eosp_token_id).nonzero()[0] - seq.eq(self.bosp_token_id).nonzero()[0] - 1).item()
 
-            # The ignore part during computing loss: 
-            # (<bos_prompt>, prompt, <eos_prompt>, <bos_speech>, speech_emb, <eos_speech>, <bos_response>)
-            # The corresponding length is:
-            # (1, prompt_length, 1, 1, speech_length, 1, 1) => prompt_length + speech_length + 5
-            # Currently, the labels is:
-            # (<bos_prompt>, prompt, <eos_prompt>, <bos_speech>, <eos_speech>, <bos_response>)
-            # For simple processing, we directly generate a mask for the above part
-            # and use the text contents (after <bos_response>)
-            ignore_contents_mask = torch.full((batch, speech_len + len_prompt + 5), self.config.ignore_token_id, device=labels.device)
-            bos_response_idx = labels[0].eq(self.bosr_token_id).nonzero()[0]
-            contents = labels[:, bos_response_idx+1:]
-            labels = torch.cat((ignore_contents_mask, contents), dim=1)
-            print(labels[0])
+                # The ignore part during computing loss:
+                # (<bos_prompt>, prompt, <eos_prompt>, <bos_speech>, speech_emb, <eos_speech>, <bos_response>)
+                # The corresponding length is:
+                # (1, prompt_length, 1, 1, speech_length, 1, 1) => prompt_length + speech_length + 5
+                # Currently, the labels is:
+                # (<bos_prompt>, prompt, <eos_prompt>, <bos_speech>, speech_emb, <eos_speech>, <bos_response>, transcription)
+                # For simple processing, we directly generate a mask for the above part (without transcription)
+                # and use the text contents (after <bos_response>)
+                ignore_contents_mask = torch.full((batch, speech_len + len_prompt + 5), self.config.ignore_token_id, device=labels.device)
+                bos_response_idx = labels[0].eq(self.bosr_token_id).nonzero()[0]
+                contents = labels[:, bos_response_idx+1:]
+                labels = torch.cat((ignore_contents_mask, contents), dim=1)
+
+            else:
+                # The ignore part during computing loss: 
+                # (speech_emb)
+                # The corresponding length is:
+                # (speech_length) => speech_length
+                # Currently, the labels is:
+                # (prompt, text)
+                # For simple processing, we directly generate a mask for the above part
+                ignore_contents_mask = torch.full((batch, speech_len), self.config.ignore_token_id, device=labels.device)
+                labels = torch.cat((ignore_contents_mask, labels), dim=1)
 
         # Decode
         decoder_outputs = self.decoder(

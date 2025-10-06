@@ -29,7 +29,7 @@ def compute_metrics(tokenizer, cache_dir: str = None, ignore_id: int = -100):
     callable
         A function `compute_metrics(pred)` compatible with HF Trainer.
     """
-    metric = evaluate.load("wer", cache_dir=cache_dir)
+    metric = evaluate.load("wer")
 
     def computing_metrics(pred):
         """
@@ -42,6 +42,8 @@ def compute_metrics(tokenizer, cache_dir: str = None, ignore_id: int = -100):
 
         # Replace -100 with pad_token_id to enable decoding
         label_ids[label_ids == ignore_id] = tokenizer.pad_token_id
+        print("LABE:", label_ids[0])
+        print("PRED:", pred_ids[0])
 
         # Decode
         pred_str  = tokenizer.batch_decode(pred_ids,  skip_special_tokens=True)

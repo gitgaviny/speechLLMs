@@ -58,8 +58,9 @@ def unfreeze_selected_params(model, model_args) -> None:
     for name, param in model.encoder.named_parameters():
         if "adapter" in name or "masked_spec_embed" in name:
             param.requires_grad = True
-        if name in model_args.partial_encoder_unfreeze:
-            param.requires_grad = True
+        for _partial in model_args.partial_encoder_unfreeze:
+            if(_partial in name):
+                param.requires_grad = True
 
     # 3) Keep encoder-decoder projection layers trainable
     for name, param in model.named_parameters():
@@ -70,8 +71,9 @@ def unfreeze_selected_params(model, model_args) -> None:
 
     # 4) Unfreeze select decoder components
     for name, param in model.decoder.named_parameters():
-        if(name in model_args.partial_decoder_unfreeze):
-            param.requires_grad = True
+        for _partial in model_args.partial_decoder_unfreeze:
+            if(_partial in name):
+                param.requires_grad = True
 
     if model_args.freeze_feature_encoder:
         model.freeze_feature_encoder()

@@ -39,7 +39,6 @@ def maybe_resample_dataset(raw_datasets, data_args, feature_extractor):
         The original or resampled dataset dict.
     """
     # 1) figure out current sampling rate from the first split
-    print(raw_datasets)
     first_split = next(iter(raw_datasets.values()))
     audio_feature = first_split.features[data_args.audio_column_name]
     dataset_sr = audio_feature.sampling_rate
