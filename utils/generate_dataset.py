@@ -60,17 +60,10 @@ def parse_args() -> argparse.Namespace:
         help="Root directory of LibriMix data.",
     )
     parser.add_argument(
-        "--number",
-        type=str,
-        choices=["2", "3"],
-        default="3",
-        help="Number of overlapping speakers (2 or 3).",
-    )
-    parser.add_argument(
         "--suffix",
         type=str,
         default="_mini",
-        help="Suffix appended after `{number}mix`, e.g. `_mini`, `_clean`, or ''",
+        help="Suffix appended after `mix`, e.g. `_mini`, `_clean`, or ''",
     )
     parser.add_argument(
         "--wav_scp_name",
@@ -82,7 +75,7 @@ def parse_args() -> argparse.Namespace:
         "--output_dir",
         type=str,
         default=None,
-        help="Output directory; defaults to `libri{number}mix{suffix}` if omitted.",
+        help="Output directory; defaults to `iemocap{suffix}` if omitted.",
     )
     parser.add_argument(
         "--prompt",
@@ -100,7 +93,6 @@ def parse_args() -> argparse.Namespace:
 def build_file_paths(
     *,
     base: str,
-    num: str,
     suffix: str,
     wav_name: str,
 ) -> Dict[str, Dict[str, str]]:
@@ -110,7 +102,8 @@ def build_file_paths(
     use_train_for_all = suffix_stripped == "mini"
 
     # Suffix is NOT appended for noisy/clean; otherwise append if not empty.
-    append_suffix = suffix and suffix_stripped not in {"noisy", "clean"}
+    # append_suffix = suffix and suffix_stripped not in {"noisy", "clean"}
+    append_suffix=None
 
     prefix_map = {
         "train": "train",
@@ -120,7 +113,7 @@ def build_file_paths(
 
     paths: Dict[str, Dict[str, str]] = {}
     for split, prefix in prefix_map.items():
-        dir_name = f"{prefix}_{num}mix{suffix if append_suffix else ''}"
+        dir_name = f"{prefix}{suffix if append_suffix else ''}"
         paths[split] = {
             "wav_scp": os.path.join(base, dir_name, wav_name),
             "text": os.path.join(base, dir_name, "text"),
@@ -170,12 +163,11 @@ def main() -> None:
         format="%(asctime)s — %(levelname)s — %(message)s",
     )
 
-    output_dir = args.output_dir or f"libri{args.number}mix{args.suffix or ''}"
+    output_dir = args.output_dir or f"iemocap"
 
     # Resolve all paths
     file_paths = build_file_paths(
         base=args.base_data_path,
-        num=args.number,
         suffix=args.suffix,
         wav_name=args.wav_scp_name,
     )

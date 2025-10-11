@@ -53,7 +53,7 @@ def main():
     else:
         model_args, data_args, training_args = parser.parse_args_into_dataclasses()
 
-    send_example_telemetry("run_speech_recognition_seq2seq", model_args, data_args, training_args)
+    send_example_telemetry("run_speech_emotion_recognition_seq2seq", model_args, data_args, training_args)
 
     # 2. Set logs
     logging.basicConfig(

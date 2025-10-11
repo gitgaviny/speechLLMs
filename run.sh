@@ -25,7 +25,6 @@ for arg in "$@"; do
     adapter_only_decoder=*) adapter_only_decoder="${arg#*=}" ;;
     instruct=*)             instruct="${arg#*=}" ;;
     talker_ctc=*)           talker_ctc="${arg#*=}" ;;
-    talker_numbers=*)       talker_numbers="${arg#*=}" ;;
     output_dir=*)           output_dir="${arg#*=}" ;;
     partial_encoder_unfreeze=*)      partial_encoder_unfreeze="${arg#*=}" ;;
     partial_decoder_unfreeze=*)       partial_decoder_unfreeze="${arg#*=}" ;;
@@ -47,7 +46,6 @@ echo "++++ decoder_freeze=$decoder_freeze"
 echo "++++ adapter_only_decoder=$adapter_only_decoder"
 echo "++++ instruct=$instruct"
 echo "++++ talker_ctc=$talker_ctc"
-echo "++++ talker_numbers=$talker_numbers"
 echo "++++ partial_encoder_unfreeze=$partial_encoder_unfreeze"
 echo "++++ partial_decoder_unfreeze=$partial_decoder_unfreeze"
 echo "++++ partial_others_unfreeze=$partial_others_unfreeze"
@@ -73,6 +71,7 @@ fi
 output_dir=${output_dir}-${corpus}
 echo "++++ output_dir=$output_dir"
 
+extra_args=""
 if [[ "$instruct" == "true" ]]; then
   extra_args+=" --instruct"
 fi
@@ -140,11 +139,10 @@ export TORCH_SHOW_CPP_STACKTRACES=1
 # 1. Data preparing
 if [ ${stage} -le 1 ] && [ ${stop_stage} -ge 1 ]; then
     "$PY_BIN" utils/generate_dataset.py \
-        --base_data_path /lustre/users/shi/toolkits/espnet/egs2/librimix/sot_asr1/data \
-        --number ${talker_numbers} \
+        --base_data_path /lustre/users/gao/SLM_datasets/iemocap \
 	--suffix _clean \
-	--wav_scp_name wav_clean.scp \
-	--output_dir datasets/libri2mix_clean
+	--wav_scp_name wav.scp \
+	--output_dir datasets/iemocap
 fi
 
 # 2. Create the pre-trained AED from pre-trained speech encoder and LLMs
@@ -156,7 +154,6 @@ if [ ${stage} -le 2 ] && [ ${stop_stage} -ge 2 ]; then
 	--llm_id ${decoder} \
 	--save_dir dump/${model_ids} \
 	--talker_ctc \
-	--talker_numbers ${talker_numbers} \
 	--check_generate \
 	$extra_args
 fi

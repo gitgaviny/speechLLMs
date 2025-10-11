@@ -113,13 +113,6 @@ def parse_args() -> argparse.Namespace:  # noqa: D401
         action="store_true",
         help="Whether to use the talker-CTCs (default: False)",
     )
-    parser.add_argument(
-        "--talker_numbers",
-        type=int,
-        default=2,
-        metavar="N",
-        help="Number of talkers (default: 2)",
-    )
 
     return parser.parse_args()
 
@@ -151,6 +144,10 @@ def add_special_tokens(tokenizer: AutoTokenizer, instruct: bool) -> List[int]:  
     if instruct:
         extra_tokens = [
             "<sc>",
+            "<NEUTRAL>",
+            "<SADNESS>",
+            "<EXCITEMENT>",
+            "<HAPPINESS>",
             "<pad>",
             "<bos_prompt>",
             "<eos_prompt>",
@@ -160,7 +157,7 @@ def add_special_tokens(tokenizer: AutoTokenizer, instruct: bool) -> List[int]:  
             "<eos_response>",
         ]
     else:
-        extra_tokens = ["<sc>", "<pad>"]
+        extra_tokens = ["<sc>", "<pad>","<NEUTRAL>","<SADNESS>","<EXCITEMENT>","<HAPPINESS>",]
 
     # Split pad vs additional_special_tokens
     additional = [tok for tok in extra_tokens if tok != "<pad>"]
@@ -229,7 +226,6 @@ def main() -> None:  # noqa: D401
 
     if args.talker_ctc:
         model.config.talker_ctc = True
-        model.config.talker_numbers = args.talker_numbers
 
     # ------------------------------------------------------------------
     # Tokenizer + feature extractor
