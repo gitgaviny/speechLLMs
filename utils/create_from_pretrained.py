@@ -144,10 +144,10 @@ def add_special_tokens(tokenizer: AutoTokenizer, instruct: bool) -> List[int]:  
     if instruct:
         extra_tokens = [
             "<sc>",
-            "<NEUTRAL>",
-            "<SADNESS>",
-            "<EXCITEMENT>",
-            "<HAPPINESS>",
+            "<neutral>",
+            "<sadness>",
+            "<anger>",
+            "<happiness>",
             "<pad>",
             "<bos_prompt>",
             "<eos_prompt>",
@@ -157,7 +157,7 @@ def add_special_tokens(tokenizer: AutoTokenizer, instruct: bool) -> List[int]:  
             "<eos_response>",
         ]
     else:
-        extra_tokens = ["<sc>", "<pad>","<NEUTRAL>","<SADNESS>","<EXCITEMENT>","<HAPPINESS>",]
+        extra_tokens = ["<sc>", "<pad>", "<neutral>", "<sadness>", "<anger>", "<happiness>",]
 
     # Split pad vs additional_special_tokens
     additional = [tok for tok in extra_tokens if tok != "<pad>"]

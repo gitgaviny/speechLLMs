@@ -429,7 +429,7 @@ class GenerationMixin_Instruct:
                     model_input = model_input.clone(memory_format=torch.contiguous_format)
                 model_inputs[model_input_name] = model_input
 
-        # 6. Create 4D attention mask is we are using a `StaticCache` (important for performant compiled forward pass)
+        # 6. Create 4D attention mask if we are using a `StaticCache` (important for performant compiled forward pass)
         if isinstance(past_key_values, StaticCache) and attention_mask.ndim == 2:
             if model_inputs["inputs_embeds"] is not None:
                 batch_size, sequence_length, _ = model_inputs["inputs_embeds"].shape

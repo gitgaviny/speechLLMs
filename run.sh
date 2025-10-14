@@ -149,7 +149,7 @@ fi
 model_ids=${encoder}-${decoder}
 if [ ${stage} -le 2 ] && [ ${stop_stage} -ge 2 ]; then
    "$PY_BIN" utils/create_from_pretrained.py \
-        --encoder_id microsoft/wavlm-large \
+  --encoder_id microsoft/wavlm-large \
 	--decoder_base /lustre/share/downloaded/models/meta-llama \
 	--llm_id ${decoder} \
 	--save_dir dump/${model_ids} \
@@ -163,7 +163,7 @@ NUM_GPUS=$("$PY_BIN" -c 'import torch; print(torch.cuda.device_count())')
 echo "Detected $NUM_GPUS GPUs"
 if [ ${stage} -le 3 ] && [ ${stop_stage} -ge 3 ]; then
     "$PY_BIN" -m torch.distributed.launch \
-  	--nproc_per_node=$NUM_GPUS finetune_asr.py \
+  --nproc_per_node=$NUM_GPUS finetune_asr.py \
 	--dataset_name="datasets/${corpus}" \
 	--model_name_or_path="dump/${model_ids}" \
 	--train_split_name="train" \

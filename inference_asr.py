@@ -142,7 +142,7 @@ def main():
 
     # 11. Define skip special tokens during inference
     def skip_special_tokens(est_text):
-        allowed_special_tokens = ["<sc>", "<bos_prompt>", "<eos_prompt>", "<bos_speech>", "<eos_speech>", "<bos_response>", "<eos_response>"]
+        allowed_special_tokens = ["<sc>", "<neutral>", "<sadness>", "<anger>", "<happiness>", "<bos_prompt>", "<eos_prompt>", "<bos_speech>", "<eos_speech>", "<bos_response>", "<eos_response>"]
         tokens = re.findall(r"<[^>]+>|[^<>\s]+", est_text)
         processed_text = " ".join(
             token for token in tokens

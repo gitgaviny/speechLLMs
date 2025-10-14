@@ -1,6 +1,6 @@
 #!/bin/bash
-#SBATCH --job-name=yuan_test
-#SBATCH --partition=002-partition-all
+#SBATCH --job-name=slmser
+#SBATCH --partition=002-partition-debug
 #SBATCH --gpus=8
 #SBATCH --container-image=/lustre/container_cache/slam-llm/slam-llm-latest.sqsh
 #SBATCH --container-mounts=/lustre:/lustre
@@ -25,7 +25,7 @@ adapter_only_decoder=true
 instruct=false
 talker_ctc=true
 eval_steps=1600
-virtual_env=/lustre/users/shi/toolkits/m_speaker_llm/Multi-Speaker-ASR-with-LLM/venv
+virtual_env=/lustre/users/gao/envs/slmser/venv
 
 output_dir=exp
 

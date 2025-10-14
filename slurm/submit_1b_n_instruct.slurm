@@ -6,13 +6,13 @@
 #SBATCH --container-mounts=/lustre:/lustre
 #SBATCH --exclusive
 
-source /lustre/users/shi/toolkits/m_speaker_llm/Multi-Speaker-ASR-with-LLM/venv/bin/activate
-cd /lustre/users/shi/toolkits/m_speaker_llm/Multi-talker-ASR-with-LLMs/slurm
+# source /lustre/users/shi/toolkits/m_speaker_llm/Multi-Speaker-ASR-with-LLM/venv/bin/activate
+cd /lustre/users/gao/speechLLMs/slurm
 
-stage=4
-stop_stage=4
+stage=2
+stop_stage=2
 epoch=40
-corpus=libri2mix_noisy
+corpus=iemocap
 encoder=wavlm
 decoder=Llama-3.2-1B-Instruct
 encoder_freeze=false
@@ -20,7 +20,6 @@ decoder_freeze=true
 adapter_only_decoder=true
 instruct=true
 talker_ctc=true
-talker_numbers=2
 eval_steps=1600
 virtual_env=/lustre/users/shi/toolkits/m_speaker_llm/Multi-Speaker-ASR-with-LLM/venv
 
@@ -35,7 +34,7 @@ bash ../run.sh \
 	stage=$stage \
 	stop_stage=$stop_stage \
 	epoch=$epoch \
-       	corpus=$corpus \
+    corpus=$corpus \
 	encoder=$encoder \
 	decoder=$decoder \
 	encoder_freeze=$encoder_freeze \
@@ -46,7 +45,6 @@ bash ../run.sh \
 	adapter_only_decoder=$adapter_only_decoder \
 	instruct=$instruct \
 	talker_ctc=$talker_ctc \
-	talker_numbers=$talker_numbers \
 	output_dir=${output_dir} \
 	eval_steps=${eval_steps} \
 	virtual_env=${virtual_env}

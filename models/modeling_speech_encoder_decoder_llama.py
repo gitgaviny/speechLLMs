@@ -7,7 +7,7 @@ from typing import Optional, Tuple, Union
 import torch
 from torch import nn
 from torch.nn import CrossEntropyLoss
-
+import pdb
 import os
 import sys
 parent = os.path.abspath(os.path.join(__file__, "..", ".."))
@@ -464,7 +464,7 @@ class SpeechEncoderDecoderModelLlama(PreTrainedModel, GenerationMixin_Instruct):
             return_dict=return_dict,
             **kwargs_decoder,
         )
-
+        # pdb.set_trace()
         # Compute loss independent from decoder (as some shift the logits inside them)
         loss = None
         if labels is not None:
