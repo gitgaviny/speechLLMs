@@ -1,20 +1,18 @@
 #!/bin/bash
 #SBATCH --job-name=slmser
-#SBATCH --partition=002-partition-debug
+#SBATCH --partition=002-partition-all
 #SBATCH --gpus=8
 #SBATCH --container-image=/lustre/container_cache/slam-llm/slam-llm-latest.sqsh
 #SBATCH --container-mounts=/lustre:/lustre
 #SBATCH --exclusive
 
-# source /lustre/users/shi/toolkits/m_speaker_llm/Multi-Speaker-ASR-with-LLM/venv/bin/activate
 cd /lustre/users/gao/speechLLMs/slurm
 
-# export PATH="/lustre/users/shi/toolkits/m_speaker_llm/Multi-Speaker-ASR-with-LLM/venv/bin:$PATH"
 
 
-stage=3
-stop_stage=3
-epoch=40
+stage=4
+stop_stage=4
+epoch=50
 corpus=iemocap
 encoder=wavlm
 decoder=Llama-3.2-1B

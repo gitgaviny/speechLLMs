@@ -152,42 +152,58 @@ def main():
 
     # 12. Inference
     _set = os.path.basename(data_args.dataset_name)
-    with open(training_args.output_dir + "/" + _set + "_label.text", "w") as l_fid, open(training_args.output_dir + "/" + _set + "_decod.text", "w") as d_fid:
+    with open(training_args.output_dir + "/" + _set + "_label.text", "w") as l_fid, open(training_args.output_dir + "/" + _set + "_decod.text", "w") as d_fid, open(training_args.output_dir + "/" + _set + "_label_emotion.text", "w") as le_fid, open(training_args.output_dir + "/" + _set + "_decod_emotion.text", "w") as de_fid:   
         logger.info("Decoding begins for %s", data_args.dataset_name)
         for i in range(len(vectorized_datasets["eval"])):
-            if(i % 100 == 0): 
+            if (i % 100 == 0):
                 logger.info("decoding samples %d", i)
 
             idx = vectorized_datasets["eval"][i]["idx"]
 
             input_feature = torch.tensor(vectorized_datasets["eval"][i]['input_values']).reshape(1, -1).to(device)
-            if(config.instruct):
+            if (config.instruct):
                 prompts = torch.tensor(vectorized_datasets["eval"][i]['prompt_ids']).reshape(1, -1).to(device)
             else:
                 prompts = None
-
+                
             est = model.generate(
-                    inputs=input_feature,
-                    prompt_ids=prompts,
-                    max_length=150,
-                    num_beams=1,
-                    synced_gpus=False,
-                    use_cache=True,
-                  )
+                inputs=input_feature,
+                prompt_ids=prompts,
+                max_length=150,
+                num_beams=1,
+                synced_gpus=False,
+                use_cache=True,
+            ).reshape(-1)
 
-            label_text = tokenizer.decode(torch.tensor(vectorized_datasets["eval"][i]['labels']))
+            labels_tensor = torch.tensor(vectorized_datasets["eval"][i]['labels'])
+            label_emotion = labels_tensor[-1].item()                   
+            labels_wo_emotion = labels_tensor[:-1]                     
+
+            est_emotion = 128257                                      
+            if est.numel() >= 2:                                      
+                second_last = est[-2].item()
+                if 128257 <= second_last <= 128260:
+                    est_emotion = second_last                      
+                    est = torch.cat([est[:-2], est[-1:]])             
+
+            label_text = tokenizer.decode(labels_wo_emotion)
             label_text = skip_special_tokens(label_text)
 
-            est_text = tokenizer.decode(est.reshape(-1), skip_special_tokens=False)
+            est_text = tokenizer.decode(est, skip_special_tokens=False)
             est_text = skip_special_tokens(est_text)
 
-            if(i % 100 == 0): 
+            if (i % 100 == 0):
                 logger.info("decoding samples %d", i)
                 logger.info("label: %s", label_text)
                 logger.info("estim: %s", est_text)
+                logger.info("label_emotion: %s, est_emotion: %s", str(label_emotion), str(est_emotion)) 
 
             l_fid.write(idx + " " + label_text + "\n")
             d_fid.write(idx + " " + est_text + "\n")
+
+            le_fid.write(idx + " " + str(label_emotion) + "\n")      
+            de_fid.write(idx + " " + str(est_emotion) + "\n")        
+
 
 
 if __name__ == "__main__":
