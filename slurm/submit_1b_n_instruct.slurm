@@ -6,7 +6,7 @@
 #SBATCH --container-mounts=/lustre:/lustre
 #SBATCH --exclusive
 
-# source /lustre/users/shi/toolkits/m_speaker_llm/Multi-Speaker-ASR-with-LLM/venv/bin/activate
+# source /lustre/users/shi/toolkits/m_speaker_llm/Multi-Speaker-ASR-with-LLM/venv
 cd /lustre/users/gao/speechLLMs/slurm
 
 stage=2

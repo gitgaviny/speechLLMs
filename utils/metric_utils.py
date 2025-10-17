@@ -9,7 +9,7 @@
 #   compute_metrics = build_compute_metrics(tokenizer, cache_dir)
 #   trainer = Trainer(..., compute_metrics=compute_metrics)
 # -----------------------------------------------------------
-
+import pdb
 import evaluate
 import numpy as np  # Optional, but HF Trainer sometimes passes numpy arrays
 
@@ -42,6 +42,7 @@ def compute_metrics(tokenizer, cache_dir: str = None, ignore_id: int = -100):
 
         # Replace -100 with pad_token_id to enable decoding
         label_ids[label_ids == ignore_id] = tokenizer.pad_token_id
+        pred_ids[pred_ids == ignore_id] = tokenizer.pad_token_id
         print("LABE:", label_ids[0])
         print("PRED:", pred_ids[0])
 

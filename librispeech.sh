@@ -62,12 +62,12 @@ if [ "${decoder_freeze}" = "true" ]; then
 else
     output_dir="${output_dir}-decoder_unfreeze"
 fi
-if [ "${adapter_only_decoder}" = "true" ]; then
-    output_dir="${output_dir}-adater_decoder"
-else
-    output_dir="${output_dir}-adater_encoder_decoder"
-fi
-output_dir=${output_dir}-${corpus}
+# if [ "${adapter_only_decoder}" = "true" ]; then
+#     output_dir="${output_dir}-adater_decoder"
+# else
+#     output_dir="${output_dir}-adater_encoder_decoder"
+# fi
+output_dir=${output_dir}-${corpus}-${epoch}
 echo "++++ output_dir=$output_dir"
 
 extra_args=""
@@ -147,62 +147,76 @@ fi
 # 2. Create the pre-trained AED from pre-trained speech encoder and LLMs
 model_ids=${encoder}-${decoder}
 if [ ${stage} -le 2 ] && [ ${stop_stage} -ge 2 ]; then
-   "$PY_BIN" utils/create_from_pretrained.py \
-  --encoder_id microsoft/wavlm-large \
-	--decoder_base /lustre/share/downloaded/models/meta-llama \
-	--llm_id ${decoder} \
-	--save_dir dump/${model_ids} \
-	--talker_ctc \
-	--check_generate \
-	$extra_args
+  if [ "${instruct}" = "true" ]; then
+    save_dir="dump_instruct/${model_ids}"
+  else
+    save_dir="dump/${model_ids}"
+  fi
+
+  "$PY_BIN" utils/create_from_pretrained.py \
+    --encoder_id microsoft/wavlm-large \
+    --decoder_base /lustre/share/downloaded/models/meta-llama \
+    --llm_id ${decoder} \
+    --save_dir "${save_dir}" \
+    --talker_ctc \
+    --check_generate \
+    $extra_args
 fi
 
 # 3. Training
 NUM_GPUS=$("$PY_BIN" -c 'import torch; print(torch.cuda.device_count())')
 echo "Detected $NUM_GPUS GPUs"
-if [ ${stage} -le 3 ] && [ ${stop_stage} -ge 3 ]; then
-    "$PY_BIN" -m torch.distributed.launch \
-  --nproc_per_node=$NUM_GPUS finetune_asr.py \
-	--dataset_name="datasets/${corpus}" \
-	--model_name_or_path="dump/${model_ids}" \
-	--train_split_name="train" \
-	--eval_split_name="validation" \
-	--adapter_only_decoder=${adapter_only_decoder} \
-	--output_dir=${output_dir} \
-	--metric_for_best_model="eval_loss" \
-	--greater_is_better=false \
-	--preprocessing_num_workers="16" \
-	--audio_column_name="audio" \
-	--text_column_name="text" \
-	--overwrite_output_dir false\
-	--num_train_epochs=${epoch} \
-	--per_device_train_batch_size="16" \
-	--per_device_eval_batch_size="16" \
-	--gradient_accumulation_steps="1" \
-	--learning_rate="3e-5" \
-	--warmup_steps="400" \
-	--evaluation_strategy="steps" \
-	--save_steps="1600" \
-	--eval_steps=${eval_steps} \
-	--logging_steps="10" \
-	--save_total_limit="5" \
-	--freeze_feature_encoder true \
-	--freeze_encoder ${encoder_freeze} \
-	--freeze_decoder ${decoder_freeze} \
-        --partial_encoder_unfreeze="${partial_encoder_unfreeze}" \
-        --partial_decoder_unfreeze="${partial_decoder_unfreeze}" \
-        --partial_others_unfreeze="${partial_others_unfreeze}" \
-	--gradient_checkpointing \
-	--fp16 \
-	--group_by_length \
-	--predict_with_generate \
-	--do_train true \
-	--do_eval true \
-  --overwrite_output_dir \
-	--do_lower_case
 
-    "$PY_BIN" utils/merge_adapter.py ${output_dir}
+if [ ${stage} -le 3 ] && [ ${stop_stage} -ge 3 ]; then
+  if [ "${instruct}" = "true" ]; then
+    model_path="dump_instruct/${model_ids}"
+  else
+    model_path="dump/${model_ids}"
+  fi
+
+  "$PY_BIN" -m torch.distributed.launch \
+    --nproc_per_node=$NUM_GPUS finetune.py \
+    --dataset_name="datasets/${corpus}" \
+    --model_name_or_path="${model_path}" \
+    --train_split_name="train" \
+    --eval_split_name="validation" \
+    --adapter_only_decoder=${adapter_only_decoder} \
+    --output_dir=${output_dir} \
+    --metric_for_best_model="eval_loss" \
+    --greater_is_better=false \
+    --preprocessing_num_workers="16" \
+    --audio_column_name="audio" \
+    --text_column_name="text" \
+    --overwrite_output_dir false \
+    --num_train_epochs=${epoch} \
+    --per_device_train_batch_size="16" \
+    --per_device_eval_batch_size="16" \
+    --gradient_accumulation_steps="1" \
+    --learning_rate="3e-5" \
+    --warmup_steps="400" \
+    --evaluation_strategy="steps" \
+    --save_steps="1600" \
+    --eval_steps=${eval_steps} \
+    --logging_steps="10" \
+    --save_total_limit="5" \
+    --freeze_feature_encoder true \
+    --freeze_encoder ${encoder_freeze} \
+    --freeze_decoder ${decoder_freeze} \
+    --partial_encoder_unfreeze="${partial_encoder_unfreeze}" \
+    --partial_decoder_unfreeze="${partial_decoder_unfreeze}" \
+    --partial_others_unfreeze="${partial_others_unfreeze}" \
+    --gradient_checkpointing \
+    --fp16 \
+    --group_by_length \
+    --predict_with_generate \
+    --do_train true \
+    --do_eval true \
+    --overwrite_output_dir \
+    --do_lower_case
+
+  "$PY_BIN" utils/merge_adapter.py ${output_dir}
 fi
+
 
 if [ ${stage} -le 4 ] && [ ${stop_stage} -ge 4 ]; then
   _set="validation test"
@@ -211,7 +225,7 @@ if [ ${stage} -le 4 ] && [ ${stop_stage} -ge 4 ]; then
     dataset_name="data/${corpus}/${subset}"
 
     "$PY_BIN" -m torch.distributed.launch \
-      --nproc_per_node 1 inference_asr.py \
+      --nproc_per_node 1 inference.py \
       --dataset_name="datasets/${corpus}/${subset}" \
       --model_name_or_path="${output_dir}" \
       --adapter_only_decoder="${adapter_only_decoder}" \

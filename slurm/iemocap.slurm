@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=slmser
-#SBATCH --partition=002-partition-all
+#SBATCH --partition=002-partition-debug
 #SBATCH --gpus=8
 #SBATCH --container-image=/lustre/container_cache/slam-llm/slam-llm-latest.sqsh
 #SBATCH --container-mounts=/lustre:/lustre
@@ -31,7 +31,7 @@ partial_encoder_unfreeze=""
 partial_decoder_unfreeze="lm_head,embed_tokens,embed_positions,layernorm_embedding"
 partial_others_unfreeze="enc_to_dec_proj"
 
-bash ../run.sh \
+bash ../iemocap.sh \
 	stage=$stage \
 	stop_stage=$stop_stage \
 	epoch=$epoch \

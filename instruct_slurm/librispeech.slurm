@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=slmser_librispeech
-#SBATCH --partition=002-partition-all2
+#SBATCH --partition=002-partition-all
 #SBATCH --gpus=8
 #SBATCH --container-image=/lustre/container_cache/slam-llm/slam-llm-latest.sqsh
 #SBATCH --container-mounts=/lustre:/lustre
@@ -11,7 +11,6 @@ EXCLUDE_NODES=$(grep -v '^\s*#' /lustre/teams/mmai/mmai-job-setting/exclude_node
 echo "Excluding nodes: $EXCLUDE_NODES"
 
 if [ -z "${SLURM_JOB_ID:-}" ]; then
-    # 说明当前不是在作业内部，而是第一次运行，重新提交自己
     sbatch --exclude="$EXCLUDE_NODES" "$0"
     exit 0
 fi
@@ -30,7 +29,7 @@ decoder=Llama-3.2-1B
 encoder_freeze=false
 decoder_freeze=true
 adapter_only_decoder=true
-instruct=false
+instruct=true
 talker_ctc=true
 eval_steps=1600
 virtual_env=/lustre/users/gao/envs/slmser/venv

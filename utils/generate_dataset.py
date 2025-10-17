@@ -56,8 +56,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--base_data_path",
         type=str,
-        default="/lustre/users/shi/toolkits/espnet/egs2/librimix/sot_asr1/data",
-        help="Root directory of LibriMix data.",
+        default="/lustre/users/gao/SLM_datasets/iemocap",
+        help="Root directory of the espnet format data.",
     )
     parser.add_argument(
         "--suffix",
@@ -80,7 +80,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--prompt",
         type=str,
-        default="TRANSCRIBE THE PROVIDED AUDIO INTO ACCURATE TEXT",
+        default="TRANSCRIBE THE PROVIDED AUDIO INTO ACCURATE TEXT FOLLOWING WITH EMOTION RECOGNITION",
         help="The prompt for systems.",
     )
 
