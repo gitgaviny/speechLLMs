@@ -17,6 +17,7 @@ for arg in "$@"; do
     stop_stage=*)           stop_stage="${arg#*=}" ;;
     epoch=*)                epoch="${arg#*=}" ;;
     corpus=*)               corpus="${arg#*=}" ;;
+    pretrained_model=*)     pretrained_model="${arg#*=}" ;;
     encoder=*)              encoder="${arg#*=}" ;;
     decoder=*)              decoder="${arg#*=}" ;;
     encoder_freeze=*)       encoder_freeze="${arg#*=}" ;;
@@ -38,6 +39,7 @@ echo "++++ stage=$stage"
 echo "++++ stop_stage=$stop_stage"
 echo "++++ epoch=$epoch"
 echo "++++ corpus=$corpus"
+echo "++++ pretrained_model=${pretrained_model:-}"
 echo "++++ encoder=$encoder"
 echo "++++ decoder=$decoder"
 echo "++++ encoder_freeze=$encoder_freeze"
@@ -168,10 +170,14 @@ NUM_GPUS=$("$PY_BIN" -c 'import torch; print(torch.cuda.device_count())')
 echo "Detected $NUM_GPUS GPUs"
 
 if [ ${stage} -le 3 ] && [ ${stop_stage} -ge 3 ]; then
-  if [ "${instruct}" = "true" ]; then
-    model_path="dump_instruct/${model_ids}"
+  if [[ -n "${pretrained_model:-}" ]]; then
+    model_path="${pretrained_model}"
   else
-    model_path="dump/${model_ids}"
+    if [ "${instruct}" = "true" ]; then
+      model_path="dump_instruct/${model_ids}"
+    else
+      model_path="dump/${model_ids}"
+    fi
   fi
 
   "$PY_BIN" -m torch.distributed.launch \
