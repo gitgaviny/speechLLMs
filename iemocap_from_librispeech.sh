@@ -200,7 +200,6 @@ if [ ${stage} -le 3 ] && [ ${stop_stage} -ge 3 ]; then
 	--predict_with_generate \
 	--do_train true \
 	--do_eval true \
-  --overwrite_output_dir \
 	--do_lower_case
 
     "$PY_BIN" utils/merge_adapter.py ${output_dir}
