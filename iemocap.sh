@@ -25,6 +25,7 @@ for arg in "$@"; do
     adapter_only_decoder=*) adapter_only_decoder="${arg#*=}" ;;
     instruct=*)             instruct="${arg#*=}" ;;
     talker_ctc=*)           talker_ctc="${arg#*=}" ;;
+    slm_dir=*)              slm_dir="${arg#*=}" ;;
     output_dir=*)           output_dir="${arg#*=}" ;;
     partial_encoder_unfreeze=*)      partial_encoder_unfreeze="${arg#*=}" ;;
     partial_decoder_unfreeze=*)       partial_decoder_unfreeze="${arg#*=}" ;;
@@ -39,6 +40,7 @@ echo "++++ stage=$stage"
 echo "++++ stop_stage=$stop_stage"
 echo "++++ epoch=$epoch"
 echo "++++ corpus=$corpus"
+echo "++++ slm_dir=$slm_dir"
 echo "++++ pretrained_model=${pretrained_model:-}"
 echo "++++ encoder=$encoder"
 echo "++++ decoder=$decoder"
@@ -64,11 +66,11 @@ if [ "${decoder_freeze}" = "true" ]; then
 else
     output_dir="${output_dir}-decoder_unfreeze"
 fi
-# if [ "${adapter_only_decoder}" = "true" ]; then
-#     output_dir="${output_dir}-adater_decoder"
-# else
-#     output_dir="${output_dir}-adater_encoder_decoder"
-# fi
+if [ "${adapter_only_decoder}" = "true" ]; then
+    output_dir="${output_dir}-adater_decoder"
+else
+    output_dir="${output_dir}-adater_encoder_decoder"
+fi
 output_dir=${output_dir}-${corpus}-${epoch}
 echo "++++ output_dir=$output_dir"
 
@@ -140,23 +142,23 @@ export TORCH_SHOW_CPP_STACKTRACES=1
 # 1. Data preparing
 if [ ${stage} -le 1 ] && [ ${stop_stage} -ge 1 ]; then
     "$PY_BIN" utils/generate_dataset.py \
-        --base_data_path /lustre/users/gao/SLM_datasets/iemocap \
+        --base_data_path /lustre/users/gao/SLM_datasets/${corpus} \
 	--suffix _clean \
 	--wav_scp_name wav.scp \
-	--output_dir datasets/iemocap
+	--output_dir datasets/${corpus}
 fi
 
 # 2. Create the pre-trained AED from pre-trained speech encoder and LLMs
 model_ids=${encoder}-${decoder}
 if [ ${stage} -le 2 ] && [ ${stop_stage} -ge 2 ]; then
   if [ "${instruct}" = "true" ]; then
-    save_dir="dump_instruct/${model_ids}"
+    save_dir="${slm_dir}/${model_ids}"
   else
-    save_dir="dump/${model_ids}"
+    save_dir="${slm_dir}/${model_ids}"
   fi
 
   "$PY_BIN" utils/create_from_pretrained.py \
-    --encoder_id microsoft/wavlm-large \
+    --encoder_id /lustre/users/gao/asr_ser/exp_wavlm \
     --decoder_base /lustre/share/downloaded/models/meta-llama \
     --llm_id ${decoder} \
     --save_dir "${save_dir}" \
@@ -172,12 +174,8 @@ echo "Detected $NUM_GPUS GPUs"
 if [ ${stage} -le 3 ] && [ ${stop_stage} -ge 3 ]; then
   if [[ -n "${pretrained_model:-}" ]]; then
     model_path="${pretrained_model}"
-  else
-    if [ "${instruct}" = "true" ]; then
-      model_path="dump_instruct/${model_ids}"
-    else
-      model_path="dump/${model_ids}"
-    fi
+  else  
+    model_path="${slm_dir}/${model_ids}"
   fi
 
   "$PY_BIN" -m torch.distributed.launch \
@@ -199,9 +197,9 @@ if [ ${stage} -le 3 ] && [ ${stop_stage} -ge 3 ]; then
     --per_device_eval_batch_size="16" \
     --gradient_accumulation_steps="1" \
     --learning_rate="3e-5" \
-    --warmup_steps="400" \
+    --warmup_steps="100" \
     --evaluation_strategy="steps" \
-    --save_steps="1600" \
+    --save_steps=${eval_steps} \
     --eval_steps=${eval_steps} \
     --logging_steps="10" \
     --save_total_limit="5" \

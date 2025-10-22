@@ -174,30 +174,18 @@ def main():
                 synced_gpus=False,
                 use_cache=True,
             ).reshape(-1)
-
+            
             labels_tensor = torch.tensor(vectorized_datasets["eval"][i]['labels'])                 
-            # import pdb
             est_emotion = 128257                                      
             if est.numel() >= 2:   
-                # pdb.set_trace()
-                if (config.instruct):      
-                    label_emotion = labels_tensor[-2].item()                   
-                    labels_wo_emotion = torch.cat([labels_tensor[:-2], labels_tensor[-1:]])             
-                    
-                    emotion = est[-3].item()
-                    if 128257 <= emotion <= 128260:
-                        est_emotion = emotion                      
-                        est = torch.cat([est[:-3], est[-2:]])
-                else:
-                    label_emotion = labels_tensor[-1].item()                   
-                    labels_wo_emotion = labels_tensor[:-1]   
+                label_emotion = labels_tensor[18].item()                   
+                labels_wo_emotion = torch.cat([labels_tensor[:18], labels_tensor[19:]])             
+                
+                emotion = est[18].item()
+                if 128257 <= emotion <= 128260:
+                    est_emotion = emotion                      
+                    est = torch.cat([est[:18], est[19:]])
 
-                    emotion = est[-2].item()
-                    if 128257 <= emotion <= 128260:
-                        est_emotion = emotion                      
-                        est = torch.cat([est[:-2], est[-1:]])        
-
-            # pdb.set_trace()
             label_text = tokenizer.decode(labels_wo_emotion)
             label_text = skip_special_tokens(label_text)
 

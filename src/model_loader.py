@@ -1,21 +1,10 @@
-"""
-Created by Hao at 2025-07-01
 
-src.model_loader
-======================
-Loader function for SpeechEncoderDecoderModelLlama from a pretrained checkpoint.
-
-Usage:
-------
-from utils.model_loader import load_aed_model
-model = load_aed_model(model_args, config, logger)
-"""
 from __future__ import annotations
 import logging
 import os
 import sys
 current_dir = os.path.dirname(os.path.abspath(__file__))
-models_dir = os.path.join(current_dir, '..', 'models')
+models_dir = os.path.join(current_dir, '..', 'models_ff')
 if models_dir not in sys.path:
     sys.path.insert(0, models_dir)
 
