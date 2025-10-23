@@ -158,7 +158,7 @@ if [ ${stage} -le 2 ] && [ ${stop_stage} -ge 2 ]; then
   fi
 
   "$PY_BIN" utils/create_from_pretrained.py \
-    --encoder_id /lustre/users/gao/asr_ser/exp_wavlm \
+    --encoder_id microsoft/wavlm-large \
     --decoder_base /lustre/share/downloaded/models/meta-llama \
     --llm_id ${decoder} \
     --save_dir "${save_dir}" \

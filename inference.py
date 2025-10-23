@@ -141,8 +141,8 @@ def main():
     )
 
     # 11. Define skip special tokens during inference
-    def skip_special_tokens(est_text):
-        allowed_special_tokens = ["<sc>", "<neutral>", "<sadness>", "<anger>", "<happiness>", "<bos_prompt>", "<eos_prompt>", "<bos_speech>", "<eos_speech>", "<bos_response>", "<eos_response>"]
+    def skip_special_tokens(est_text): #"<neutral>", "<sadness>", "<anger>", "<happiness>",
+        allowed_special_tokens = ["<sc>",  "<bos_prompt>", "<eos_prompt>", "<bos_speech>", "<eos_speech>", "<bos_response>", "<eos_response>"]
         tokens = re.findall(r"<[^>]+>|[^<>\s]+", est_text)
         processed_text = " ".join(
             token for token in tokens
@@ -175,22 +175,33 @@ def main():
                 use_cache=True,
             ).reshape(-1)
             
-            labels_tensor = torch.tensor(vectorized_datasets["eval"][i]['labels'])                 
-            est_emotion = 128257                                      
-            if est.numel() >= 2:   
-                label_emotion = labels_tensor[18].item()                   
-                labels_wo_emotion = torch.cat([labels_tensor[:18], labels_tensor[19:]])             
+            labels_tensor = torch.tensor(vectorized_datasets["eval"][i]['labels'])                                                 
+            # if est.numel() >= 2:   
+            #     label_emotion = labels_tensor[18].item()                   
+            #     labels_wo_emotion = torch.cat([labels_tensor[:18], labels_tensor[19:]])             
                 
-                emotion = est[18].item()
-                if 128257 <= emotion <= 128260:
-                    est_emotion = emotion                      
-                    est = torch.cat([est[:18], est[19:]])
-
-            label_text = tokenizer.decode(labels_wo_emotion)
+            #     emotion = est[18].item()
+            #     if 128257 <= emotion <= 128260:
+            #         est_emotion = emotion                      
+            #         est = torch.cat([est[:18], est[19:]])
+            import pdb
+            pdb.set_trace()
+            label_text = tokenizer.decode(labels_tensor)
             label_text = skip_special_tokens(label_text)
 
             est_text = tokenizer.decode(est, skip_special_tokens=False)
             est_text = skip_special_tokens(est_text)
+
+            with torch.no_grad():
+                out = model(
+                    inputs=input_feature,   
+                    decoder_input_ids=128265,
+                )
+            emo_logits = out.emotion_logits                     
+            est_emotion = int(emo_logits.argmax(dim=-1).item())  + 128257
+
+            # 若你的 GT 仍保存在 labels 的第18位为 token id(128257..128260)：
+            label_emotion = int(labels_tensor[17].item())
 
             if (i % 100 == 0):
                 logger.info("decoding samples %d", i)

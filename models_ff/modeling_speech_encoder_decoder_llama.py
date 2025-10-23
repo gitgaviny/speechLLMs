@@ -3,7 +3,8 @@
 # https://github.com/huggingface/transformers/blob/main/src/transformers/models/speech_encoder_decoder/modeling_speech_encoder_decoder.py
 
 from typing import Optional, Tuple, Union
-
+from dataclasses import dataclass
+import torch.nn.functional as F
 import torch
 from torch import nn
 from torch.nn import CrossEntropyLoss
@@ -30,6 +31,10 @@ logger = logging.getLogger(__name__)
 
 _CONFIG_FOR_DOC = "SpeechEncoderDecoderConfig"
 
+@dataclass
+class SpeechSeq2SeqLMOutput(Seq2SeqLMOutput):
+    emotion_logits: Optional[torch.FloatTensor] = None  
+    
 # Copied from transformers.models.encoder_decoder.modeling_encoder_decoder.shift_tokens_right
 def shift_tokens_right(input_ids: torch.Tensor, pad_token_id: int, decoder_start_token_id: int):
     """
@@ -93,7 +98,7 @@ class SpeechEncoderDecoderModelLlama(PreTrainedModel, GenerationMixin_Instruct):
         self.encoder = encoder
         self.decoder = decoder
 
-        self.cls_head = nn.Linear(config.encoder.hidden_size *2 , 4)
+        self.cls_head = nn.Linear(self.decoder.config.hidden_size *2 , 4)
 
         if self.encoder.config.to_dict() != self.config.encoder.to_dict():
             logger.warning(
@@ -347,12 +352,14 @@ class SpeechEncoderDecoderModelLlama(PreTrainedModel, GenerationMixin_Instruct):
         input_values: Optional[torch.FloatTensor] = None,
         input_features: Optional[torch.FloatTensor] = None,
         return_dict: Optional[bool] = None,
+        return_emotion_logits: Optional[bool] = False,
         **kwargs,
     ) -> Union[Tuple[torch.FloatTensor], Seq2SeqLMOutput]:
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
-        emotion_labels = labels[:, 17]
-        labels = torch.cat([labels[:, :17], labels[:, 18:]], dim=1)
+        if labels is not None:
+            emotion_labels = labels[:, 17] - 128257
+            labels = torch.cat([labels[:, :17], labels[:, 18:]], dim=1)
 
         kwargs_encoder = {argument: value for argument, value in kwargs.items() if not argument.startswith("decoder_")}
 
@@ -473,10 +480,11 @@ class SpeechEncoderDecoderModelLlama(PreTrainedModel, GenerationMixin_Instruct):
         decoder_utt = torch.mean(decoder_outputs.hidden_states, dim=1)
         encoder_utt = torch.mean(encoder_hidden_states, dim=1)
         emotion = torch.cat([decoder_utt, encoder_utt], dim=1)
-        logits_cls = self.cls_head(emotion)
+        emotion = self.cls_head(emotion)
 
         # Compute loss independent from decoder (as some shift the logits inside them)
         loss = None
+
         if labels is not None:
             logits = decoder_outputs.logits if return_dict else decoder_outputs[0]
             loss_fct = CrossEntropyLoss()
@@ -490,7 +498,7 @@ class SpeechEncoderDecoderModelLlama(PreTrainedModel, GenerationMixin_Instruct):
             else:
                 return decoder_outputs + encoder_outputs
 
-        return Seq2SeqLMOutput(
+        return SpeechSeq2SeqLMOutput(
             loss=loss,
             logits=decoder_outputs.logits,
             past_key_values=decoder_outputs.past_key_values,
@@ -499,6 +507,7 @@ class SpeechEncoderDecoderModelLlama(PreTrainedModel, GenerationMixin_Instruct):
             encoder_last_hidden_state=encoder_hidden_states,
             encoder_hidden_states=encoder_outputs.hidden_states,
             encoder_attentions=encoder_outputs.attentions,
+            emotion_logits = emotion,
         )
 
 __all__ = ["SpeechEncoderDecoderModelLlama"]

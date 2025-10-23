@@ -6,6 +6,15 @@
 #SBATCH --container-mounts=/lustre:/lustre
 #SBATCH --exclusive
 
+EXCLUDE_NODES=$(grep -v '^\s*#' /lustre/teams/mmai/mmai-job-setting/exclude_nodes.txt | grep -v '^\s*$' | paste -sd,)
+
+echo "Excluding nodes: $EXCLUDE_NODES"
+
+if [ -z "${SLURM_JOB_ID:-}" ]; then
+    sbatch --exclude="$EXCLUDE_NODES" "$0"
+    exit 0
+fi
+
 cd /lustre/users/gao/speechLLMs/slurm
 
 
@@ -26,7 +35,7 @@ eval_steps=400
 virtual_env=/lustre/users/gao/envs/slmser/venv
 
 slm_dir=dump
-output_dir=exp_
+output_dir=exp_1
 
 partial_encoder_unfreeze=""
 partial_decoder_unfreeze="lm_head,embed_tokens,embed_positions,layernorm_embedding"

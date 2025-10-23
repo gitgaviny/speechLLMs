@@ -230,7 +230,7 @@ if [ ${stage} -le 4 ] && [ ${stop_stage} -ge 4 ]; then
     dataset_name="data/${corpus}/${subset}"
 
     "$PY_BIN" -m torch.distributed.launch \
-      --nproc_per_node 1 inference.py \
+      --nproc_per_node 1 inference_bk.py \
       --dataset_name="datasets/${corpus}/${subset}" \
       --model_name_or_path="${output_dir}" \
       --adapter_only_decoder="${adapter_only_decoder}" \
