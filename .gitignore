@@ -1,12 +1,7 @@
 .DS_Store
 __pycache__
 datasets
-dump
-dump_instruct
-dump_1stage
-exp
-exp_instruct
-exp_
-exp_1stage
+/*dump*/
+/*exp*/
 slurm-*.out
 

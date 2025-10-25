@@ -1,25 +1,19 @@
 #!/bin/bash
-#SBATCH --job-name=slm_asrser_acc
+#SBATCH --job-name=slm_ff
 #SBATCH --partition=002-partition-all2
 #SBATCH --gpus=8
 #SBATCH --container-image=/lustre/container_cache/slam-llm/slam-llm-latest.sqsh
 #SBATCH --container-mounts=/lustre:/lustre
 #SBATCH --exclusive
 
-EXCLUDE_NODES=$(grep -v '^\s*#' /lustre/teams/mmai/mmai-job-setting/exclude_nodes.txt | grep -v '^\s*$' | paste -sd,)
 
-echo "Excluding nodes: $EXCLUDE_NODES"
+export HF_HOME="/lustre/teams/speech/hf_cache/"
+export WORKING_DIR=/lustre/users/gao/speechLLMs/slurm
 
-if [ -z "${SLURM_JOB_ID:-}" ]; then
-    sbatch --exclude="$EXCLUDE_NODES" "$0"
-    exit 0
-fi
+cd $WORKING_DIR
 
-cd /lustre/users/gao/speechLLMs/slurm
-
-
-stage=3
-stop_stage=3
+stage=4
+stop_stage=4
 epoch=50
 corpus=iemocap
 # pretrained_model=/lustre/users/gao/speechLLMs/exp/wavlm-Llama-3.2-1B-encoder_unfreeze-decoder_freeze-librispeech-5
@@ -34,8 +28,8 @@ talker_ctc=true
 eval_steps=400
 virtual_env=/lustre/users/gao/envs/slmser/venv
 
-slm_dir=dump
-output_dir=exp_1
+slm_dir=dump_ff
+output_dir=exp_ff
 
 partial_encoder_unfreeze=""
 partial_decoder_unfreeze="lm_head,embed_tokens,embed_positions,layernorm_embedding"
