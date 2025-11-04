@@ -4,7 +4,7 @@ import logging
 import os
 import sys
 current_dir = os.path.dirname(os.path.abspath(__file__))
-models_dir = os.path.join(current_dir, '..', 'models')
+models_dir = os.path.join(current_dir, '..', 'models_ff')
 if models_dir not in sys.path:
     sys.path.insert(0, models_dir)
 

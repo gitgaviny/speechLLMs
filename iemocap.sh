@@ -20,6 +20,7 @@ for arg in "$@"; do
     pretrained_model=*)     pretrained_model="${arg#*=}" ;;
     encoder=*)              encoder="${arg#*=}" ;;
     decoder=*)              decoder="${arg#*=}" ;;
+    fused_model=*)          fused_model="${arg#*=}" ;;
     encoder_freeze=*)       encoder_freeze="${arg#*=}" ;;
     decoder_freeze=*)       decoder_freeze="${arg#*=}" ;;
     adapter_only_decoder=*) adapter_only_decoder="${arg#*=}" ;;
@@ -44,6 +45,7 @@ echo "++++ slm_dir=$slm_dir"
 echo "++++ pretrained_model=${pretrained_model:-}"
 echo "++++ encoder=$encoder"
 echo "++++ decoder=$decoder"
+echo "++++ fused_model=$fused_model"
 echo "++++ encoder_freeze=$encoder_freeze"
 echo "++++ decoder_freeze=$decoder_freeze"
 echo "++++ adapter_only_decoder=$adapter_only_decoder"
@@ -151,20 +153,26 @@ fi
 # 2. Create the pre-trained AED from pre-trained speech encoder and LLMs
 model_ids=${encoder}-${decoder}
 if [ ${stage} -le 2 ] && [ ${stop_stage} -ge 2 ]; then
-  if [ "${instruct}" = "true" ]; then
-    save_dir="${slm_dir}/${model_ids}"
+  save_dir="${slm_dir}/${model_ids}"
+  if [[ "${fused_model:-false}" == "false" ]]; then
+    "${PY_BIN}" utils/create_from_pretrained.py \
+      --encoder_id "/lustre/users/gao/asr_ser/exp_wavlm" \
+      --decoder_base "/lustre/share/downloaded/models/meta-llama" \
+      --llm_id "${decoder}" \
+      --save_dir "${save_dir}" \
+      --talker_ctc \
+      --check_generate \
+      $extra_args
   else
-    save_dir="${slm_dir}/${model_ids}"
+    "${PY_BIN}" utils/create_from_pretrained.py \
+      --encoder_id "/lustre/users/gao/asr_ser/exp_wavlm" \
+      --decoder_base "/lustre/share/downloaded/models/meta-llama" \
+      --llm_id "${decoder}" \
+      --save_dir "${save_dir}" \
+      --talker_ctc \
+      --check_generate \
+      $extra_args
   fi
-
-  "$PY_BIN" utils/create_from_pretrained.py \
-    --encoder_id microsoft/wavlm-large \
-    --decoder_base /lustre/share/downloaded/models/meta-llama \
-    --llm_id ${decoder} \
-    --save_dir "${save_dir}" \
-    --talker_ctc \
-    --check_generate \
-    $extra_args
 fi
 
 # 3. Training
@@ -179,7 +187,7 @@ if [ ${stage} -le 3 ] && [ ${stop_stage} -ge 3 ]; then
   fi
 
   "$PY_BIN" -m torch.distributed.launch \
-    --nproc_per_node=$NUM_GPUS finetune.py \
+    --nproc_per_node=$NUM_GPUS finetune_ff.py \
     --dataset_name="datasets/${corpus}" \
     --model_name_or_path="${model_path}" \
     --train_split_name="train" \
@@ -228,7 +236,7 @@ if [ ${stage} -le 4 ] && [ ${stop_stage} -ge 4 ]; then
     dataset_name="data/${corpus}/${subset}"
 
     "$PY_BIN" -m torch.distributed.launch \
-      --nproc_per_node 1 inference.py \
+      --nproc_per_node 1 inference_ff.py \
       --dataset_name="datasets/${corpus}/${subset}" \
       --model_name_or_path="${output_dir}" \
       --adapter_only_decoder="${adapter_only_decoder}" \

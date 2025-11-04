@@ -3,8 +3,6 @@ import os
 import sys
 import logging
 import datasets
-import torch
-import re
 
 from dataclasses import dataclass, field
 import transformers
@@ -14,7 +12,7 @@ from src.dataset_loader import load_dataset_or_fail
 from src.feature_extractor_loader import load_feature_extractor
 from src.config_loader import load_config
 from src.tokenizer_loader import load_tokenizer
-from src.model_loader import load_aed_model
+from src.model_loader_ff import load_aed_model
 from src.insert_adapter_decoder import insert_adapters
 from src.data_collator import DataCollatorSpeechSeq2SeqWithPadding
 from src.trainer_seq2seq import Seq2SeqTrainer
@@ -40,8 +38,6 @@ from transformers.trainer_utils import get_last_checkpoint, is_main_process
 from safetensors.torch import save_file, load_file
 from safetensors.torch import load_model, save_model
 
-from datasets import DatasetDict, load_dataset, load_from_disk
-
 
 require_version("datasets>=1.18.0", "To fix: pip install -r examples/pytorch/speech-recognition/requirements.txt")
 
@@ -57,7 +53,7 @@ def main():
     else:
         model_args, data_args, training_args = parser.parse_args_into_dataclasses()
 
-    send_example_telemetry("run_speech_recognition_seq2seq", model_args, data_args, training_args)
+    send_example_telemetry("run_speech_emotion_recognition_seq2seq", model_args, data_args, training_args)
 
     # 2. Set logs
     logging.basicConfig(
@@ -82,8 +78,7 @@ def main():
     set_seed(training_args.seed)
 
     # 4. Load dataset
-    raw_datasets = DatasetDict()
-    raw_datasets = load_from_disk(data_args.dataset_name)
+    raw_datasets = load_dataset_or_fail(data_args, logger)
 
     # 5. Load pretrained model, tokenizer, and feature extractor
     config = load_config(model_args)
@@ -100,11 +95,10 @@ def main():
     logger.info("Tokenizer %s", tokenizer)
 
     model = load_aed_model(model_args, config, logger)
-    model.eval()
 
-    # Setting CUDA
-    model = model.to("cuda")
-    device = model.device
+    # 6. Insert adapters into deocder and set the trainable parameters
+    insert_adapters(model, model_args, config)
+    unfreeze_selected_params(model, model_args)
 
     # 7. Some other settings for configuration
     # Here we write a new get_input_embeddings for fix the undefined of pre-defined function of SpeechEncoderDecoderModel
@@ -116,7 +110,7 @@ def main():
     model.config.forced_decoder_ids = None
 
     # 8. Dataset
-    # raw_datasets = maybe_resample_dataset(raw_datasets, data_args, feature_extractor)
+    raw_datasets = maybe_resample_dataset(raw_datasets, data_args, feature_extractor)
     vectorized_datasets = preprocess_and_filter(
             raw_datasets,
             data_args,
@@ -124,7 +118,6 @@ def main():
             tokenizer,
             config,
             training_args,
-            inference_mode=True,
             )
 
     # 9. Create a single speech processor
@@ -140,73 +133,55 @@ def main():
         config=config,
     )
 
-    # 11. Define skip special tokens during inference
-    def skip_special_tokens(est_text):
-        allowed_special_tokens = ["<sc>", "<neutral>", "<sadness>", "<anger>", "<happiness>", "<bos_prompt>", "<eos_prompt>", "<bos_speech>", "<eos_speech>", "<bos_response>", "<eos_response>"]
-        tokens = re.findall(r"<[^>]+>|[^<>\s]+", est_text)
-        processed_text = " ".join(
-            token for token in tokens
-            if token in allowed_special_tokens or not (token.startswith("<") and token.endswith(">"))
-            )
-        return processed_text
+    # Some Special settings for increase dataloding speed
+    training_args.remove_unused_columns = False
+    # training_args.dataloader_num_workers = 2
+    # training_args.dataloader_pin_memory = True
+    # training_args.group_by_length = False
 
-    # 12. Inference
-    _set = os.path.basename(data_args.dataset_name)
-    with open(training_args.output_dir + "/" + _set + "_label.text", "w") as l_fid, open(training_args.output_dir + "/" + _set + "_decod.text", "w") as d_fid, open(training_args.output_dir + "/" + _set + "_label_emotion.text", "w") as le_fid, open(training_args.output_dir + "/" + _set + "_decod_emotion.text", "w") as de_fid:   
-        logger.info("Decoding begins for %s", data_args.dataset_name)
-        for i in range(len(vectorized_datasets["eval"])):
-            if (i % 100 == 0):
-                logger.info("decoding samples %d", i)
+    # 11. Initialize Trainer
+    trainer = Seq2SeqTrainer(
+        model=model,
+        args=training_args,
+        train_dataset=vectorized_datasets["train"] if training_args.do_train else None,
+        eval_dataset=vectorized_datasets["eval"] if training_args.do_eval else None,
+        processing_class=feature_extractor,
+        data_collator=data_collator,
+        compute_metrics=compute_metrics(tokenizer, cache_dir=model_args.cache_dir, ignore_id=model.config.ignore_token_id) if training_args.predict_with_generate else None,
+    )
 
-            idx = vectorized_datasets["eval"][i]["idx"]
+    # 12. Training
+    if training_args.do_train:
+        checkpoint = None
+        if training_args.resume_from_checkpoint is not None:
+            checkpoint = training_args.resume_from_checkpoint
+        elif last_ckpt is not None:
+            checkpoint = last_ckpt
 
-            input_feature = torch.tensor(vectorized_datasets["eval"][i]['input_values']).reshape(1, -1).to(device)
-            if (config.instruct):
-                prompts = torch.tensor(vectorized_datasets["eval"][i]['prompt_ids']).reshape(1, -1).to(device)
-            else:
-                prompts = None
-                
-            est = model.generate(
-                inputs=input_feature,
-                prompt_ids=prompts,
-                max_length=150,
-                num_beams=1,
-                synced_gpus=False,
-                use_cache=True,
-            ).reshape(-1)
+        train_result = trainer.train(resume_from_checkpoint=checkpoint)
 
-            labels_tensor = torch.tensor(vectorized_datasets["eval"][i]['labels'])                 
-            # import pdb
-            # pdb.set_trace()
-            est_emotion = 128257                                      
-            if est.numel() >= 2:     
-                label_emotion = labels_tensor[18].item()                   
-                labels_wo_emotion = torch.cat([labels_tensor[:18], labels_tensor[19:]])             
-                
-                emotion = est[18].item()
-                if 128257 <= emotion <= 128260:
-                    est_emotion = emotion                      
-                    est = torch.cat([est[:18], est[19:]])   
+        best_model = trainer.model
+        save_model(best_model, os.path.join(training_args.output_dir, "model_unmerge.safetensors"))
+        tokenizer.save_pretrained(training_args.output_dir)
 
+        metrics = train_result.metrics
+        max_train_samples = (
+            data_args.max_train_samples
+            if data_args.max_train_samples is not None
+            else len(vectorized_datasets["train"])
+        )
+        metrics["train_samples"] = min(max_train_samples, len(vectorized_datasets["train"]))
+        trainer.log_metrics("train", metrics)
+        trainer.save_metrics("train", metrics)
+        trainer.save_state()
 
-            label_text = tokenizer.decode(labels_wo_emotion)
-            label_text = skip_special_tokens(label_text)
+    # 13. Write Training Stats
+    kwargs = build_training_kwargs(model_args, data_args)
 
-            est_text = tokenizer.decode(est, skip_special_tokens=False)
-            est_text = skip_special_tokens(est_text)
-
-            if (i % 100 == 0):
-                logger.info("decoding samples %d", i)
-                logger.info("label: %s", label_text)
-                logger.info("estim: %s", est_text)
-                logger.info("label_emotion: %s, est_emotion: %s", str(label_emotion), str(est_emotion)) 
-
-            l_fid.write(idx + " " + label_text + "\n")
-            d_fid.write(idx + " " + est_text + "\n")
-
-            le_fid.write(idx + " " + str(label_emotion) + "\n")      
-            de_fid.write(idx + " " + str(est_emotion) + "\n")        
-
+    if training_args.push_to_hub:
+        trainer.push_to_hub(**kwargs)
+    else:
+        trainer.create_model_card(**kwargs)
 
 
 if __name__ == "__main__":

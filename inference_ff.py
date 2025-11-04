@@ -14,7 +14,7 @@ from src.dataset_loader import load_dataset_or_fail
 from src.feature_extractor_loader import load_feature_extractor
 from src.config_loader import load_config
 from src.tokenizer_loader import load_tokenizer
-from src.model_loader import load_aed_model
+from src.model_loader_ff import load_aed_model
 from src.insert_adapter_decoder import insert_adapters
 from src.data_collator import DataCollatorSpeechSeq2SeqWithPadding
 from src.trainer_seq2seq import Seq2SeqTrainer
@@ -141,8 +141,8 @@ def main():
     )
 
     # 11. Define skip special tokens during inference
-    def skip_special_tokens(est_text):
-        allowed_special_tokens = ["<sc>", "<neutral>", "<sadness>", "<anger>", "<happiness>", "<bos_prompt>", "<eos_prompt>", "<bos_speech>", "<eos_speech>", "<bos_response>", "<eos_response>"]
+    def skip_special_tokens(est_text): #"<neutral>", "<sadness>", "<anger>", "<happiness>",
+        allowed_special_tokens = ["<sc>",  "<bos_prompt>", "<eos_prompt>", "<bos_speech>", "<eos_speech>", "<bos_response>", "<eos_response>"]
         tokens = re.findall(r"<[^>]+>|[^<>\s]+", est_text)
         processed_text = " ".join(
             token for token in tokens
@@ -174,25 +174,34 @@ def main():
                 synced_gpus=False,
                 use_cache=True,
             ).reshape(-1)
+                       
+            with torch.no_grad():
+                attention_mask = torch.ones_like(input_feature, dtype=torch.long, device=device)
+                decoder_input_ids = torch.cat(
+                    [torch.tensor([[model.config.decoder_start_token_id]], device=prompts.device, dtype=torch.long),
+                    prompts],
+                    dim=1
+                )
 
-            labels_tensor = torch.tensor(vectorized_datasets["eval"][i]['labels'])                 
-            # import pdb
-            est_emotion = 128257                                      
-            if est.numel() >= 2:     
-                label_emotion = labels_tensor[18].item()                   
-                labels_wo_emotion = torch.cat([labels_tensor[:18], labels_tensor[19:]])             
-                
-                emotion = est[18].item()
-                if 128257 <= emotion <= 128260:
-                    est_emotion = emotion                      
-                    est = torch.cat([est[:18], est[19:]])   
+                out = model(
+                    inputs=input_feature,
+                    prompt_ids=prompts,
+                    attention_mask=attention_mask,   
+                    decoder_input_ids=decoder_input_ids,
+                    output_hidden_states=None,      
+                    return_dict=True,
+                    use_cache=True,
+                )
 
-            # pdb.set_trace()
-            label_text = tokenizer.decode(labels_wo_emotion)
+            labels_tensor = torch.tensor(vectorized_datasets["eval"][i]['labels'])     
+            label_text = tokenizer.decode(labels_tensor)
             label_text = skip_special_tokens(label_text)
+            label_emotion = int(labels_tensor[18].item())
 
             est_text = tokenizer.decode(est, skip_special_tokens=False)
             est_text = skip_special_tokens(est_text)
+            emo_logits = out.emotion_logits          
+            est_emotion = int(emo_logits.argmax(dim=-1).item()) + 128257
 
             if (i % 100 == 0):
                 logger.info("decoding samples %d", i)
