@@ -1,7 +1,6 @@
-.DS_Store
 __pycache__
 datasets
-/*dump*/
-/*exp*/
+*dump*/
+*exp*/
 slurm-*.out
 
